@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>b64 — encodeur d'images</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b10;
+    --surface:#131319;
+    --surface-2:#1a1a22;
+    --line:rgba(255,255,255,0.08);
+    --line-strong:rgba(255,255,255,0.16);
+    --ink-0:#f5f4f1;
+    --ink-1:#a8a6b3;
+    --ink-2:#666472;
+    --violet:#9b8cff;
+    --violet-glow:#9b8cff33;
+    --peach:#ffb98c;
+    --mint:#8cffc9;
+    --sans:'Manrope', sans-serif;
+    --serif:'Instrument Serif', serif;
+    --mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink-0);
+    font-family:var(--sans);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    position:relative;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:
+      radial-gradient(circle at 15% 0%, #3d2f6b55, transparent 45%),
+      radial-gradient(circle at 90% 20%, #6b4a3d3d, transparent 40%),
+      radial-gradient(circle at 50% 100%, #2f6b5533, transparent 50%);
+    pointer-events:none;
+    z-index:0;
+  }
+  ::selection{background:var(--violet); color:#0b0b10;}
+
+  .wrap{position:relative; z-index:1; max-width:1040px; margin:0 auto; padding:0 clamp(20px,5vw,40px);}
+
+  header{padding:clamp(56px,9vw,96px) 0 clamp(40px,7vw,64px);}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:11.5px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--violet); background:var(--violet-glow); border:1px solid #9b8cff44;
+    padding:6px 12px; border-radius:100px; margin-bottom:28px;
+  }
+  .eyebrow::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--mint); box-shadow:0 0 10px var(--mint);}
+
+  h1{
+    font-family:var(--serif); font-weight:400; font-style:normal;
+    font-size:clamp(40px,7vw,72px); line-height:1.02; letter-spacing:-0.01em;
+    margin:0 0 20px; max-width:14ch;
+  }
+  h1 em{font-style:italic; color:var(--violet);}
+
+  header p.lede{
+    color:var(--ink-1); max-width:52ch; font-size:clamp(15px,1.8vw,17px); margin:0;
+  }
+  header p.lede code{font-family:var(--mono); color:var(--ink-0); background:var(--surface-2); padding:2px 7px; border-radius:5px; font-size:0.88em;}
+
+  main{padding-bottom:100px;}
+
+  .dropzone{
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:clamp(40px,8vw,72px) 24px;
+    text-align:center;
+    cursor:pointer;
+    background:linear-gradient(180deg, var(--surface), var(--surface) 100%);
+    transition:border-color 0.25s ease, transform 0.15s ease, background 0.25s ease;
+    position:relative;
+    overflow:hidden;
+  }
+  .dropzone::after{
+    content:""; position:absolute; inset:0; border-radius:20px; padding:1px;
+    background:linear-gradient(135deg, transparent, transparent);
+    pointer-events:none; transition:background 0.25s ease;
+  }
+  .dropzone:hover{border-color:var(--line-strong); transform:translateY(-2px);}
+  .dropzone.drag{
+    border-color:var(--violet);
+    background:linear-gradient(180deg, #9b8cff14, var(--surface));
+  }
+  .dz-icon{
+    width:52px; height:52px; margin:0 auto 20px;
+    border-radius:14px; display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); border:1px solid var(--line);
+  }
+  .dz-icon svg{width:22px; height:22px; stroke:var(--violet);}
+  .dropzone .main-txt{font-size:17px; font-weight:600; margin-bottom:8px;}
+  .dropzone .sub-txt{font-family:var(--mono); font-size:12.5px; color:var(--ink-2);}
+  .dropzone input{display:none;}
+
+  .grid{display:grid; grid-template-columns:1fr 1.1fr; gap:20px; margin-top:24px; align-items:start;}
+  @media (max-width:840px){ .grid{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:18px;
+    padding:24px; animation:rise 0.4s ease both;
+  }
+  @keyframes rise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+  .card-label{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--ink-2); margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;
+  }
+  .card-label span.count{color:var(--ink-1);}
+
+  .preview-wrap{
+    display:flex; align-items:center; justify-content:center;
+    border-radius:12px; min-height:240px; padding:16px;
+    background:
+      linear-gradient(45deg, var(--surface-2) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--surface-2) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--surface-2) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--surface-2) 75%);
+    background-size:18px 18px;
+    background-position:0 0, 0 9px, 9px -9px, -9px 0px;
+    background-color:#0e0e13;
+    overflow:hidden;
+  }
+  .preview-wrap img{max-width:100%; max-height:270px; border-radius:6px; display:block; box-shadow:0 20px 40px -20px rgba(0,0,0,0.6);}
+  .preview-wrap .empty{color:var(--ink-2); font-family:var(--mono); font-size:12.5px;}
+
+  .meta{margin-top:16px; display:flex; flex-direction:column; gap:0;}
+  .meta div{
+    display:flex; justify-content:space-between; padding:9px 0;
+    border-bottom:1px solid var(--line); font-size:13px;
+  }
+  .meta div:last-child{border-bottom:none;}
+  .meta .k{color:var(--ink-2);}
+  .meta .v{font-family:var(--mono); font-size:12.5px; color:var(--ink-0);}
+
+  textarea{
+    width:100%; height:200px; resize:vertical;
+    background:#0e0e13; border:1px solid var(--line); border-radius:12px;
+    color:var(--mint); font-family:var(--mono); font-size:11.5px; padding:14px;
+    word-break:break-all;
+  }
+  textarea:focus{outline:none; border-color:var(--violet);}
+  textarea::placeholder{color:var(--ink-2); font-family:var(--sans);}
+
+  .btnrow{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  button.act{
+    background:var(--surface-2); border:1px solid var(--line); color:var(--ink-0);
+    font-family:var(--sans); font-weight:600; font-size:13px;
+    padding:10px 16px; border-radius:10px; cursor:pointer;
+    transition:border-color 0.15s ease, transform 0.1s ease, background 0.15s ease;
+  }
+  button.act:hover{border-color:var(--line-strong); transform:translateY(-1px);}
+  button.act:active{transform:translateY(0) scale(0.98);}
+  button.act.primary{
+    background:linear-gradient(135deg, var(--violet), #7a68e0);
+    color:#0b0b10; border-color:transparent;
+  }
+  button.act.primary:hover{filter:brightness(1.08); border-color:transparent;}
+  button.act:disabled{opacity:0.35; cursor:not-allowed; transform:none;}
+
+  .batch-list{margin-top:16px; display:flex; flex-direction:column; gap:8px;}
+  .batch-item{
+    display:flex; align-items:center; gap:12px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px 14px;
+    transition:border-color 0.15s ease;
+  }
+  .batch-item:hover{border-color:var(--line-strong);}
+  .batch-item.active{border-color:var(--violet);}
+  .batch-item img{width:36px; height:36px; object-fit:cover; border-radius:7px; flex-shrink:0; background:var(--surface-2);}
+  .batch-item .name{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500;}
+  .batch-item .size{font-family:var(--mono); font-size:11.5px; color:var(--ink-2); flex-shrink:0;}
+  .batch-item button{flex-shrink:0; padding:6px 12px; font-size:12px;}
+
+  .toast{
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(16px);
+    background:var(--ink-0); color:#0b0b10; font-family:var(--sans); font-weight:600; font-size:13px;
+    padding:12px 20px; border-radius:100px; box-shadow:0 10px 30px -10px rgba(0,0,0,0.5);
+    opacity:0; transition:opacity 0.25s ease, transform 0.25s ease; pointer-events:none; z-index:10;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  footer{
+    padding:28px 0 40px; color:var(--ink-2); font-size:12.5px; font-family:var(--mono);
+    border-top:1px solid var(--line); text-align:center; position:relative; z-index:1;
+  }
+
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">100% local · rien n'est envoyé sur un serveur</div>
+    <h1>Convertis tes images<br>en <em>base64</em>, sans friction.</h1>
+    <p class="lede">Glisse une image, récupère le code. Tout se passe dans ton navigateur via <code>FileReader</code> — pratique pour embarquer une icône directement dans du CSS, du HTML, ou un favicon.</p>
+  </header>
+
+  <main>
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="image/*" multiple>
+      <div class="dz-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+      </div>
+      <div class="main-txt">Dépose une image ici, ou clique pour parcourir</div>
+      <div class="sub-txt">PNG · JPG · WEBP · SVG · GIF — plusieurs fichiers acceptés</div>
+    </div>
+
+    <div class="grid" id="mainGrid" style="display:none;">
+      <div class="card">
+        <div class="card-label">Aperçu <span class="count" id="fileCount"></span></div>
+        <div class="preview-wrap" id="previewWrap"><span class="empty">aucune image sélectionnée</span></div>
+        <div class="meta" id="metaBox"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Sortie base64 <span class="count" id="charCount"></span></div>
+        <textarea id="output" placeholder="Le code base64 apparaîtra ici..." readonly></textarea>
+        <div class="btnrow">
+          <button class="act primary" id="btnCopy" disabled>Copier</button>
+          <button class="act" id="btnHtml" disabled>Balise &lt;img&gt;</button>
+          <button class="act" id="btnCss" disabled>CSS</button>
+          <button class="act" id="btnDownload" disabled>Télécharger .txt</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="batch-list" id="batchList"></div>
+  </main>
+
+  <footer>b64 · outil local, aucune limite serveur · fait pour Nexus-Aegis</footer>
+</div>
+
+<div class="toast" id="toast">Copié</div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const mainGrid = document.getElementById('mainGrid');
+  const previewWrap = document.getElementById('previewWrap');
+  const metaBox = document.getElementById('metaBox');
+  const output = document.getElementById('output');
+  const charCount = document.getElementById('charCount');
+  const fileCount = document.getElementById('fileCount');
+  const batchList = document.getElementById('batchList');
+  const toast = document.getElementById('toast');
+  const btnCopy = document.getElementById('btnCopy');
+  const btnDownload = document.getElementById('btnDownload');
+  const btnHtml = document.getElementById('btnHtml');
+  const btnCss = document.getElementById('btnCss');
+
+  let files = [];
+  let activeIndex = 0;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1600);
+  }
+
+  function formatBytes(bytes){
+    if(bytes < 1024) return bytes + ' o';
+    if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' Ko';
+    return (bytes/(1024*1024)).toFixed(2) + ' Mo';
+  }
+
+  function readFileAsBase64(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFiles(fileListRaw){
+    const incoming = Array.from(fileListRaw).filter(f => f.type.startsWith('image/'));
+    if(incoming.length === 0) return;
+
+    for(const file of incoming){
+      const dataUrl = await readFileAsBase64(file);
+      files.push({file, dataUrl});
+    }
+
+    mainGrid.style.display = 'grid';
+    renderBatchList();
+    setActive(files.length - 1);
+  }
+
+  function renderBatchList(){
+    batchList.innerHTML = '';
+    if(files.length <= 1) return;
+    files.forEach((entry, i) => {
+      const item = document.createElement('div');
+      item.className = 'batch-item' + (i === activeIndex ? ' active' : '');
+      item.innerHTML =
+        '<img src="' + entry.dataUrl + '" alt="">' +
+        '<span class="name">' + entry.file.name + '</span>' +
+        '<span class="size">' + formatBytes(entry.file.size) + '</span>' +
+        '<button class="act" data-idx="' + i + '">Voir</button>';
+      item.querySelector('button').addEventListener('click', () => setActive(i));
+      batchList.appendChild(item);
+    });
+  }
+
+  function setActive(i){
+    activeIndex = i;
+    const entry = files[i];
+    if(!entry) return;
+
+    previewWrap.innerHTML = '<img src="' + entry.dataUrl + '" alt="' + entry.file.name + '">';
+    output.value = entry.dataUrl;
+    charCount.textContent = entry.dataUrl.length.toLocaleString('fr-FR') + ' caractères';
+    fileCount.textContent = files.length > 1 ? '(' + (i+1) + '/' + files.length + ')' : '';
+
+    const img = new Image();
+    img.onload = () => {
+      metaBox.innerHTML =
+        '<div><span class="k">Nom</span><span class="v">' + entry.file.name + '</span></div>' +
+        '<div><span class="k">Type</span><span class="v">' + entry.file.type + '</span></div>' +
+        '<div><span class="k">Taille fichier</span><span class="v">' + formatBytes(entry.file.size) + '</span></div>' +
+        '<div><span class="k">Dimensions</span><span class="v">' + img.width + ' × ' + img.height + ' px</span></div>' +
+        '<div><span class="k">Taille base64</span><span class="v">' + formatBytes(entry.dataUrl.length) + '</span></div>';
+    };
+    img.src = entry.dataUrl;
+
+    [btnCopy, btnDownload, btnHtml, btnCss].forEach(b => b.disabled = false);
+    renderBatchList();
+  }
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+  ['dragenter','dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  dropzone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+
+  btnCopy.addEventListener('click', () => {
+    navigator.clipboard.writeText(output.value).then(() => showToast('Base64 copié'));
+  });
+
+  btnHtml.addEventListener('click', () => {
+    const entry = files[activeIndex];
+    const tag = '<img src="' + entry.dataUrl + '" alt="' + entry.file.name.replace(/\.[^/.]+$/, '') + '">';
+    navigator.clipboard.writeText(tag).then(() => showToast('Balise <img> copiée'));
+  });
+
+  btnCss.addEventListener('click', () => {
+    const entry = files[activeIndex];
+    const css = 'background-image: url("' + entry.dataUrl + '");';
+    navigator.clipboard.writeText(css).then(() => showToast('CSS copié'));
+  });
+
+  btnDownload.addEventListener('click', () => {
+    const entry = files[activeIndex];
+    const blob = new Blob([entry.dataUrl], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = entry.file.name.replace(/\.[^/.]+$/, '') + '-base64.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Fichier téléchargé');
+  });
+})();
+</script>
+
+</body>
+</html>
